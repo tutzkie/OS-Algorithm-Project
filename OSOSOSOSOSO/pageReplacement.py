@@ -2,34 +2,34 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 # ── Colors ───────────────────────────────────────────────────────────────────
-BG          = "#1E1E1E"
-BG2         = "#2A2A2A"
-BG3         = "#333333"
-TEXT        = "#E8E6E3"
+BG          = "#0a0a0a"
+BG2         = "#141414"
+BG3         = "#2a2a2a"
+TEXT        = "#FFFFFF"
 TEXT2       = "#A8A6A3"
 TEXT3       = "#6B6967"
 BORDER      = "#3A3A3A"
 BORDER2     = "#444444"
-BLUE        = "#185FA5"
 BLUE_LIGHT  = "#B5D4F4"
 BLUE_DARK   = "#042C53"
-RED         = "#993C1D"
-RED_LIGHT   = "#F5C4B3"
-RED_DARK    = "#4A1B0C"
-GREEN       = "#0F6E56"
-ORANGE      = "#D85A30"
-BAR_GRAY    = "#555550"
-BAR_GREEN   = "#1D9E75"
-WHITE       = "#FFFFFF"
-YELLOW      = "#C8A84B"
 
+# Theme Colors
+MAGENTA     = "#A855F7"  
+MAGENTA_H   = "#B875FA" 
+CYAN        = "#06B6D4"  
+FAULT_COLOR = "#D946EF"  
+FAULT_COLOR_H = "#E879F9"  
+ORANGE      = "#F97316"  
+BAR_GRAY    = "#3F3F46"
+
+# ── Brief Descriptions ───────────────────────────────────────────────────────
 DESCS = {
-    "fifo":   "FIFO — the page that was loaded first is replaced first. Simple but can worsen with more frames (Belady's anomaly).",
-    "lru":    "LRU — replaces the page unused for the longest time. Better than FIFO in practice; no Belady's anomaly.",
-    "opt":    "OPT (optimal/MIN) — replaces the page not needed for the longest future time. Theoretical best; used as a benchmark.",
-    "second": "Second chance (clock) — FIFO with a reference bit. A page with bit=1 gets a second chance; its bit is cleared and it moves to the back of the queue.",
-    "lfu":    "LFU (Least Frequently Used) — keeps a running count of references per page. The page with the lowest count is replaced. FIFO breaks ties.",
-    "mfu":    "MFU (Most Frequently Used) — replaces the page with the highest count, arguing the least-used page was just brought in and still needs to be used.",
+    "fifo":   "FIFO: Replaces the oldest loaded page. Simple, but susceptible to Belady's anomaly.",
+    "lru":    "LRU: Replaces the page unused for the longest time. Reliable; no Belady's anomaly.",
+    "opt":    "OPT: Replaces the page not needed for the longest future time. Theoretical benchmark.",
+    "second": "Second Chance: FIFO with a reference bit. Pages with bit=1 get skipped and reset.",
+    "lfu":    "LFU: Replaces the page with the lowest reference count. FIFO breaks ties.",
+    "mfu":    "MFU: Replaces the page with the highest reference count.",
 }
 
 REF_STRINGS = {
@@ -128,12 +128,11 @@ def compute(algo, refs, frames):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 class PageReplacementApp(tk.Frame):
-    CELL = 34
-    GAP  = 4
+    CELL = 42
+    GAP  = 6
 
     def __init__(self, master):
         super().__init__(master, bg=BG)
-
         self.algo         = "fifo"
         self.refs         = REF_STRINGS["Classic (7,0,1,2,0,3...)"]
         self.frames_count = 3
@@ -143,288 +142,304 @@ class PageReplacementApp(tk.Frame):
         self._playing     = False
 
         self._build_ui()
+        self._apply_stealth_scrollbars()
         self._compute_and_reset()
 
-    # ─────────────────────────────────────────────────────────────────────────
+    def _create_round_rect(self, canvas, x1, y1, x2, y2, radius=8, **kwargs):
+        points = [
+            x1+radius, y1,
+            x1+radius, y1, x2-radius, y1, x2-radius, y1,
+            x2, y1, x2, y1+radius, x2, y1+radius,
+            x2, y2-radius, x2, y2-radius, x2, y2,
+            x2-radius, y2, x2-radius, y2, x1+radius, y2,
+            x1+radius, y2, x1, y2, x1, y2-radius,
+            x1, y2-radius, x1, y1+radius, x1, y1+radius,
+            x1, y1
+        ]
+        return canvas.create_polygon(points, **kwargs, smooth=True)
+
+    def _bind_hover(self, btn, normal_bg, hover_bg, normal_fg=TEXT, hover_fg=TEXT):
+        btn.bind("<Enter>", lambda e: btn.config(bg=hover_bg, fg=hover_fg))
+        btn.bind("<Leave>", lambda e: btn.config(bg=normal_bg, fg=normal_fg))
+
+    def _apply_stealth_scrollbars(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("TScrollbar", gripcount=0, background=BORDER, darkcolor=BG, lightcolor=BG,
+                        troughcolor=BG, bordercolor=BG, arrowcolor=TEXT2, relief="flat")
+        style.map("TScrollbar", background=[('active', BORDER2)])
+        style.configure("TCombobox", fieldbackground=BG, background=BG, foreground=TEXT, selectbackground=MAGENTA, 
+                        selectforeground=BG, arrowcolor=TEXT2, relief="flat", bordercolor=BORDER, lightcolor=BG, darkcolor=BG)
+        style.map("TCombobox", fieldbackground=[("readonly", BG)], foreground=[("readonly", TEXT)])
+
     def _build_ui(self):
-        # ── Top fixed panel (controls, tabs, legend, info) ───────────────────
-        top = tk.Frame(self, bg=BG)
-        top.pack(fill="x", padx=18, pady=(14, 0))
+        split = tk.Frame(self, bg=BG)
+        split.pack(fill="both", expand=True)
 
-        tk.Label(top, text="Page replacement algorithm simulator",
-                 bg=BG, fg=TEXT, font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        tk.Label(top, text="Step through FIFO, LRU, OPT, second chance, LFU, and MFU",
-                 bg=BG, fg=TEXT2, font=("Segoe UI", 10)).pack(anchor="w", pady=(0, 8))
+        # ─── LEFT SIDEBAR ────────────────────────────────────────────────────
+        sidebar = tk.Frame(split, bg=BG2, width=320, highlightthickness=1, highlightbackground=BORDER)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
 
-        # Algo description
-        self.desc_var = tk.StringVar()
-        desc_f = tk.Frame(top, bg=BG2)
-        desc_f.pack(fill="x", pady=(0, 8))
-        tk.Frame(desc_f, bg=BLUE, width=3).pack(side="left", fill="y")
-        tk.Label(desc_f, textvariable=self.desc_var, bg=BG2, fg=TEXT2,
-                 font=("Segoe UI", 10), wraplength=680, justify="left",
-                 padx=10, pady=8).pack(side="left", fill="x", expand=True)
+        hdr_frame = tk.Frame(sidebar, bg=BG2)
+        hdr_frame.pack(fill="x", padx=20, pady=(25, 20))
+        tk.Label(hdr_frame, text="Page Replacement", bg=BG2, fg=MAGENTA, font=("Segoe UI", 22, "bold")).pack(anchor="w")
+        tk.Label(hdr_frame, text="Simulator", bg=BG2, fg=TEXT2, font=("Segoe UI", 13, "bold")).pack(anchor="w")
 
-        # ── Controls row ─────────────────────────────────────────────────────
-        ctrl = tk.Frame(top, bg=BG)
-        ctrl.pack(fill="x", pady=(0, 4))
-        ctrl.columnconfigure(0, weight=3)
-        ctrl.columnconfigure(1, weight=1)
-        ctrl.columnconfigure(2, weight=0)
-
-        # Reference string preset dropdown
-        lf0 = tk.Frame(ctrl, bg=BG); lf0.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        tk.Label(lf0, text="Reference string", bg=BG, fg=TEXT2,
-                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
-        self.ref_var = tk.StringVar(value="Classic (7,0,1,2,0,3...)")
-        self.ref_cb = ttk.Combobox(lf0, textvariable=self.ref_var,
-                                   values=list(REF_STRINGS.keys()),
-                                   state="readonly", font=("Segoe UI", 11))
-        self.ref_cb.pack(fill="x")
-        self.ref_cb.bind("<<ComboboxSelected>>", self._on_preset_selected)
-
-        # Frames spinbox
-        lf1 = tk.Frame(ctrl, bg=BG); lf1.grid(row=0, column=1, sticky="ew", padx=(0, 6))
-        tk.Label(lf1, text="Frames", bg=BG, fg=TEXT2,
-                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
-        self.frame_var = tk.IntVar(value=3)
-        sb = tk.Spinbox(lf1, from_=1, to=9, textvariable=self.frame_var, width=5,
-                        font=("Segoe UI", 11), bg=BG2, fg=TEXT,
-                        insertbackground=TEXT, buttonbackground=BG3,
-                        relief="flat", bd=1)
-        sb.pack(fill="x")
-        sb.bind("<FocusOut>", lambda e: self._compute_and_reset())
-        sb.bind("<Return>", lambda e: self._compute_and_reset())
-        self.frame_var.trace_add("write", lambda *_: self.after(100, self._compute_and_reset))
-
-        # Reset button
-        lf2 = tk.Frame(ctrl, bg=BG); lf2.grid(row=0, column=2, sticky="s")
-        tk.Button(lf2, text="Reset", command=self._compute_and_reset,
-                  bg=BG2, fg=TEXT, font=("Segoe UI", 10), relief="flat",
-                  padx=12, pady=5, cursor="hand2",
-                  activebackground=BG3, activeforeground=TEXT).pack()
-
-        # ── Custom reference string row ───────────────────────────────────────
-        custom_f = tk.Frame(top, bg=BG)
-        custom_f.pack(fill="x", pady=(2, 8))
-
-        tk.Label(custom_f, text="Custom string:", bg=BG, fg=TEXT2,
-                 font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 6))
-
-        self.custom_var = tk.StringVar()
-        custom_entry = tk.Entry(custom_f, textvariable=self.custom_var,
-                                font=("Segoe UI", 10), bg=BG2, fg=TEXT,
-                                insertbackground=TEXT, relief="flat",
-                                highlightthickness=1, highlightbackground=BORDER,
-                                highlightcolor=BLUE)
-        custom_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        custom_entry.bind("<Return>", lambda e: self._use_custom())
-
-        tk.Label(custom_f, text="(e.g. 1,2,3,4,1,2)", bg=BG, fg=TEXT3,
-                 font=("Segoe UI", 9, "italic")).pack(side="left", padx=(6, 8))
-
-        tk.Button(custom_f, text="Use", command=self._use_custom,
-                  bg=BLUE, fg=WHITE, font=("Segoe UI", 9, "bold"),
-                  relief="flat", padx=10, pady=4, cursor="hand2",
-                  activebackground="#1A6BBF", activeforeground=WHITE).pack(side="left")
-
-        # ── Algorithm tabs ────────────────────────────────────────────────────
-        tab_frame = tk.Frame(top, bg=BG)
-        tab_frame.pack(fill="x", pady=(0, 8))
+        algo_outer = tk.Frame(sidebar, bg=BORDER)
+        algo_outer.pack(fill="x", padx=20, pady=(0, 20))
+        
         self.tab_btns = {}
-        for key, lbl in [("fifo","FIFO"),("lru","LRU"),("opt","OPT"),
-                          ("second","Second chance"),("lfu","LFU"),("mfu","MFU")]:
-            btn = tk.Button(tab_frame, text=lbl,
-                            command=lambda k=key: self._set_algo(k),
-                            font=("Segoe UI", 10), relief="flat",
-                            padx=10, pady=4, cursor="hand2")
-            btn.pack(side="left", padx=2)
+        algos = [("fifo", "FIFO"), ("lru", "LRU"), ("opt", "OPT"), ("second", "Second"), ("lfu", "LFU"), ("mfu", "MFU")]
+
+        for i, (key, lbl) in enumerate(algos):
+            btn = tk.Button(algo_outer, text=lbl, bd=0, relief="flat", cursor="hand2", pady=8, font=("Segoe UI", 9, "bold"))
+            btn.grid(row=i//2, column=i%2, sticky="nsew", padx=1, pady=1)
+            algo_outer.columnconfigure(i%2, weight=1)
+            btn.configure(command=lambda k=key: self._set_algo(k))
             self.tab_btns[key] = btn
+            
         self._style_tabs()
 
-        # ── Legend ────────────────────────────────────────────────────────────
-        leg = tk.Frame(top, bg=BG)
-        leg.pack(fill="x", pady=(0, 8))
-        for color, border, lbl in [
-            (BLUE,       None,   "Current reference"),
-            (RED,        None,   "Page fault"),
-            (GREEN,      None,   "Page hit"),
-            (BLUE_LIGHT, BLUE,   "Newly loaded"),
-            (RED_LIGHT,  ORANGE, "Evicted"),
-        ]:
-            dot = tk.Frame(leg, bg=color, width=12, height=12,
-                           highlightthickness=1 if border else 0,
-                           highlightbackground=border or color)
-            dot.pack(side="left", padx=(0, 3))
-            dot.pack_propagate(False)
-            tk.Label(leg, text=lbl, bg=BG, fg=TEXT2,
-                     font=("Segoe UI", 9)).pack(side="left", padx=(0, 12))
+        self.desc_var = tk.StringVar()
+        desc_box = tk.Frame(sidebar, bg=BG3, highlightthickness=1, highlightbackground=BORDER)
+        desc_box.pack(fill="x", padx=20, pady=(0, 25))
+        tk.Frame(desc_box, bg=MAGENTA, height=2).pack(fill="x", side="top")
+        tk.Label(desc_box, textvariable=self.desc_var, bg=BG3, fg=TEXT, font=("Segoe UI", 9), wraplength=260, justify="left", padx=14, pady=14).pack(fill="x")
 
-        # ── Info box ──────────────────────────────────────────────────────────
-        info_f = tk.Frame(top, bg=BG2)
-        info_f.pack(fill="x", pady=(0, 8))
-        tk.Frame(info_f, bg=BLUE, width=3).pack(side="left", fill="y")
-        self.info_var = tk.StringVar(value="Press step or play to begin.")
-        tk.Label(info_f, textvariable=self.info_var, bg=BG2, fg=TEXT,
-                 font=("Segoe UI", 10), wraplength=680, justify="left",
-                 padx=10, pady=8, anchor="w").pack(side="left", fill="x", expand=True)
+        # ── Configuration Dashboard ──
+        cfg_hdr = tk.Frame(sidebar, bg=BG2)
+        cfg_hdr.pack(fill="x", padx=20, pady=(0, 15))
+        tk.Frame(cfg_hdr, bg=MAGENTA, width=3).pack(side="left", fill="y", pady=2)
+        tk.Label(cfg_hdr, text="Configuration", bg=BG2, fg=TEXT, font=("Segoe UI", 10, "bold")).pack(side="left", padx=8)
 
-        # ── Scrollable simulation card ────────────────────────────────────────
-        sim_outer = tk.Frame(self, bg=BG, padx=18)
-        sim_outer.pack(fill="both", expand=True, pady=(0, 14))
+        form_frame = tk.Frame(sidebar, bg=BG2)
+        form_frame.pack(fill="x", padx=20)
+        form_frame.columnconfigure(1, weight=1)
 
-        # Canvas + scrollbar for the whole sim card
+        tk.Label(form_frame, text="Preset", bg=BG2, fg=TEXT2, font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", pady=6)
+        self.ref_var = tk.StringVar(value="Classic (7,0,1,2,0,3...)")
+        self.ref_cb = ttk.Combobox(form_frame, textvariable=self.ref_var, values=list(REF_STRINGS.keys()), state="readonly", font=("Segoe UI", 9), width=15)
+        self.ref_cb.grid(row=0, column=1, sticky="e", pady=6)
+        self.ref_cb.bind("<<ComboboxSelected>>", self._on_preset_selected)
+
+        tk.Label(form_frame, text="Frames", bg=BG2, fg=TEXT2, font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w", pady=6)
+        self.frame_var = tk.IntVar(value=3)
+        
+        stepper = tk.Frame(form_frame, bg=BG, highlightthickness=1, highlightbackground=BORDER)
+        stepper.grid(row=1, column=1, sticky="e", pady=6)
+        
+        def adjust_frames(delta):
+            val = self.frame_var.get() + delta
+            if 1 <= val <= 9:
+                self.frame_var.set(val)
+                self._compute_and_reset()
+
+        btn_minus = tk.Button(stepper, text="−", bg=BG, fg=TEXT2, font=("Segoe UI", 10, "bold"), bd=0, activebackground=BG3, command=lambda: adjust_frames(-1), cursor="hand2")
+        btn_minus.pack(side="left", ipadx=6, ipady=1)
+        self._bind_hover(btn_minus, BG, BG3, TEXT2, TEXT)
+
+        self.lbl_frames = tk.Label(stepper, textvariable=self.frame_var, bg=BG, fg=TEXT, font=("Segoe UI", 10, "bold"), width=3)
+        self.lbl_frames.pack(side="left")
+
+        btn_plus = tk.Button(stepper, text="+", bg=BG, fg=TEXT2, font=("Segoe UI", 10, "bold"), bd=0, activebackground=BG3, command=lambda: adjust_frames(1), cursor="hand2")
+        btn_plus.pack(side="left", ipadx=6, ipady=1)
+        self._bind_hover(btn_plus, BG, BG3, TEXT2, TEXT)
+
+        tk.Label(form_frame, text="Custom", bg=BG2, fg=TEXT2, font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", pady=6)
+        
+        custom_wrapper = tk.Frame(form_frame, bg=BG2)
+        custom_wrapper.grid(row=2, column=1, sticky="e", pady=6)
+        
+        self.custom_var = tk.StringVar()
+        custom_entry = tk.Entry(custom_wrapper, textvariable=self.custom_var, width=14, font=("Segoe UI", 9), bg=BG, fg=TEXT, insertbackground=MAGENTA, relief="flat", highlightthickness=1, highlightbackground=BORDER)
+        custom_entry.pack(side="left", ipady=3)
+        custom_entry.bind("<Return>", lambda e: self._use_custom())
+
+        apply_btn = tk.Button(custom_wrapper, text="↵", bg=BG3, fg=TEXT, font=("Segoe UI", 10, "bold"), bd=0, command=self._use_custom, cursor="hand2")
+        apply_btn.pack(side="left", fill="y", padx=(4, 0), ipadx=6)
+        self._bind_hover(apply_btn, BG3, BORDER2, TEXT, TEXT)
+
+        # ─── RIGHT MAIN CONTENT ──────────────────────────────────────────────
+        main_content = tk.Frame(split, bg=BG)
+        main_content.pack(side="left", fill="both", expand=True)
+
+        top_bar = tk.Frame(main_content, bg=BG, height=70)
+        top_bar.pack(fill="x", padx=20, pady=(20, 10))
+        top_bar.pack_propagate(False)
+
+        self.status_frame = tk.Frame(top_bar, bg=BG, highlightthickness=1, highlightbackground=BORDER)
+        self.status_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
+        
+        self.status_pill_bg = tk.Frame(self.status_frame, bg=BG3)
+        self.status_pill_bg.pack(side="left", fill="y")
+        self.status_pill = tk.Label(self.status_pill_bg, text="WAIT", bg=BG3, fg=TEXT2, font=("Segoe UI", 11, "bold"), width=8)
+        self.status_pill.pack(expand=True, padx=10)
+
+        self.info_var = tk.StringVar(value="SYSTEM IDLE  —  Awaiting trace execution.")
+        tk.Label(self.status_frame, textvariable=self.info_var, bg=BG, fg=TEXT, font=("Segoe UI", 10), padx=20).pack(side="left", fill="both")
+
+        stats_container = tk.Frame(top_bar, bg=BG)
+        stats_container.pack(side="right", fill="y")
+
+        self.stat_faults = tk.StringVar(value="0")
+        self.stat_hits   = tk.StringVar(value="0")
+        self.stat_total  = tk.StringVar(value="0")
+        self.stat_rate   = tk.StringVar(value="0%")
+
+        for var, lbl, col in [(self.stat_faults, "FAULTS", FAULT_COLOR), (self.stat_hits, "HITS", CYAN), (self.stat_total, "TOTAL", TEXT3), (self.stat_rate, "RATE", MAGENTA)]:
+            card = tk.Frame(stats_container, bg=BG)
+            card.pack(side="left", padx=(12, 12), fill="y")
+            tk.Frame(card, bg=col, height=2).pack(side="top", fill="x", pady=(4, 6))
+            tk.Label(card, text=" ".join(lbl), bg=BG, fg=TEXT3, font=("Segoe UI", 8, "bold")).pack(anchor="center")
+            tk.Label(card, textvariable=var, bg=BG, fg=TEXT, font=("Segoe UI", 20, "bold")).pack(anchor="center")
+
+        # ── Scrollable Canvas Area ──
+        sim_outer = tk.Frame(main_content, bg=BG)
+        sim_outer.pack(fill="both", expand=True, padx=20)
+
         self._scroll_canvas = tk.Canvas(sim_outer, bg=BG, highlightthickness=0)
-        vscroll = tk.Scrollbar(sim_outer, orient="vertical",
-                               command=self._scroll_canvas.yview)
+        vscroll = ttk.Scrollbar(sim_outer, orient="vertical", command=self._scroll_canvas.yview)
         self._scroll_canvas.configure(yscrollcommand=vscroll.set)
         vscroll.pack(side="right", fill="y")
         self._scroll_canvas.pack(side="left", fill="both", expand=True)
 
-        self._sim_card = tk.Frame(self._scroll_canvas, bg=BG2,
-                                  highlightthickness=1, highlightbackground=BORDER)
-        self._card_win = self._scroll_canvas.create_window(
-            (0, 0), window=self._sim_card, anchor="nw")
+        self._sim_card = tk.Frame(self._scroll_canvas, bg=BG2, highlightthickness=1, highlightbackground=BORDER)
+        self._card_win = self._scroll_canvas.create_window((0, 0), window=self._sim_card, anchor="nw")
 
         self._sim_card.bind("<Configure>", self._on_card_configure)
         self._scroll_canvas.bind("<Configure>", self._on_canvas_configure)
-        # Mouse-wheel scrolling
-        self._scroll_canvas.bind_all("<MouseWheel>",
-            lambda e: self._scroll_canvas.yview_scroll(-1*(e.delta//120), "units"))
-        self._scroll_canvas.bind_all("<Button-4>",
-            lambda e: self._scroll_canvas.yview_scroll(-1, "units"))
-        self._scroll_canvas.bind_all("<Button-5>",
-            lambda e: self._scroll_canvas.yview_scroll(1, "units"))
+        self._scroll_canvas.bind_all("<MouseWheel>", lambda e: self._scroll_canvas.yview_scroll(-1*(e.delta//120), "units"))
+        self._scroll_canvas.bind_all("<Shift-MouseWheel>", lambda e: [self.ref_canvas.xview_scroll(-1*(e.delta//120), "units"), self.frame_canvas.xview_scroll(-1*(e.delta//120), "units")])
 
-        # ── Inside sim card ───────────────────────────────────────────────────
-        # Reference string row
+        # Ref String Row
         ref_hdr = tk.Frame(self._sim_card, bg=BG3)
         ref_hdr.pack(fill="x")
-        tk.Label(ref_hdr, text="REFERENCE STRING", bg=BG3, fg=TEXT3,
-                 font=("Segoe UI", 8, "bold"), pady=6, padx=12).pack(anchor="w")
-        ref_cf = tk.Frame(self._sim_card, bg=BG3)
-        ref_cf.pack(fill="x")
-        self.ref_canvas = tk.Canvas(ref_cf, bg=BG3, height=self.CELL+8, highlightthickness=0)
-        ref_xscroll = tk.Scrollbar(ref_cf, orient="horizontal", command=self.ref_canvas.xview)
+        tk.Frame(ref_hdr, bg=MAGENTA, width=3).pack(side="left", fill="y")
+        tk.Label(ref_hdr, text="REFERENCE STRING", bg=BG3, fg=TEXT, font=("Segoe UI", 8, "bold"), pady=8, padx=11).pack(anchor="w", side="left")
+        
+        self.ref_canvas = tk.Canvas(self._sim_card, bg=BG2, height=self.CELL+16, highlightthickness=0)
+        ref_xscroll = ttk.Scrollbar(self._sim_card, orient="horizontal", command=self.ref_canvas.xview)
         self.ref_canvas.configure(xscrollcommand=ref_xscroll.set)
-        self.ref_canvas.pack(fill="x", padx=10, pady=(0, 2))
+        self.ref_canvas.pack(fill="x", padx=10, pady=(8, 0))
         ref_xscroll.pack(fill="x", padx=10, pady=(0, 6))
-
         tk.Frame(self._sim_card, bg=BORDER, height=1).pack(fill="x")
 
-        # Frames area
-        fr_hdr = tk.Frame(self._sim_card, bg=BG2)
+        # Frames Row
+        fr_hdr = tk.Frame(self._sim_card, bg=BG3)
         fr_hdr.pack(fill="x")
-        tk.Label(fr_hdr, text="FRAMES AT EACH STEP", bg=BG2, fg=TEXT3,
-                 font=("Segoe UI", 8, "bold"), pady=6, padx=12).pack(anchor="w")
-        fr_cf = tk.Frame(self._sim_card, bg=BG2)
-        fr_cf.pack(fill="x")
-        self.frame_canvas = tk.Canvas(fr_cf, bg=BG2, highlightthickness=0)
-        fr_xscroll = tk.Scrollbar(fr_cf, orient="horizontal", command=self.frame_canvas.xview)
+        tk.Frame(fr_hdr, bg=MAGENTA, width=3).pack(side="left", fill="y")
+        tk.Label(fr_hdr, text="FRAMES AT EACH STEP", bg=BG3, fg=TEXT, font=("Segoe UI", 8, "bold"), pady=8, padx=11).pack(anchor="w", side="left")
+        
+        self.frame_canvas = tk.Canvas(self._sim_card, bg=BG2, highlightthickness=0)
+        fr_xscroll = ttk.Scrollbar(self._sim_card, orient="horizontal", command=self.frame_canvas.xview)
         self.frame_canvas.configure(xscrollcommand=fr_xscroll.set)
-        self.frame_canvas.pack(fill="x", padx=10, pady=(0, 2))
+        self.frame_canvas.pack(fill="x", padx=10, pady=(8, 0))
         fr_xscroll.pack(fill="x", padx=10, pady=(0, 6))
 
-        # Tally area (LFU/MFU) — hidden by default
-        # Tally area (LFU/MFU) — single wrapper, shown/hidden via pack/pack_forget
+        # Color Legend
+        leg_frame = tk.Frame(self._sim_card, bg=BG2)
+        leg_frame.pack(fill="x", padx=14, pady=(0, 15))
+        
+        for color, lbl in [(CYAN, "Hit"), (FAULT_COLOR, "Fault"), (MAGENTA, "Load"), (ORANGE, "Evict")]:
+            block = tk.Frame(leg_frame, bg=BG2)
+            block.pack(side="left", padx=(0, 20))
+            dot = tk.Frame(block, bg=color, width=10, height=10)
+            dot.pack(side="left")
+            dot.pack_propagate(False)
+            tk.Label(block, text=lbl, bg=BG2, fg=TEXT2, font=("Segoe UI", 8, "bold")).pack(side="left", padx=(6, 0))
+
+        tk.Frame(self._sim_card, bg=BORDER, height=1).pack(fill="x")
+
+        # Tally Row (LFU/MFU)
         self._tally_wrapper = tk.Frame(self._sim_card, bg=BG2)
-        tk.Frame(self._tally_wrapper, bg=BORDER, height=1).pack(fill="x")
+        self._tally_wrapper.pack(fill="x")
+        tal_hdr = tk.Frame(self._tally_wrapper, bg=BG3)
+        tal_hdr.pack(fill="x")
+        tk.Frame(tal_hdr, bg=MAGENTA, width=3).pack(side="left", fill="y")
         self.tally_label_var = tk.StringVar(value="REFERENCE COUNTS")
-        tk.Label(self._tally_wrapper, textvariable=self.tally_label_var, bg=BG2, fg=TEXT3,
-                 font=("Segoe UI", 8, "bold"), pady=6, padx=12).pack(anchor="w")
-        self.tally_inner = tk.Frame(self._tally_wrapper, bg=BG2)
-        self.tally_inner.pack(fill="x", padx=12, pady=(0, 8))
-        # Do NOT pack _tally_wrapper here; _render() handles it
+        tk.Label(tal_hdr, textvariable=self.tally_label_var, bg=BG3, fg=TEXT, font=("Segoe UI", 8, "bold"), pady=8, padx=11).pack(anchor="w", side="left")
+        
+        self.tally_canvas = tk.Canvas(self._tally_wrapper, bg=BG2, height=90, highlightthickness=0)
+        tal_xscroll = ttk.Scrollbar(self._tally_wrapper, orient="horizontal", command=self.tally_canvas.xview)
+        self.tally_canvas.configure(xscrollcommand=tal_xscroll.set)
+        self.tally_canvas.pack(fill="x", padx=10, pady=(8, 0))
+        tal_xscroll.pack(fill="x", padx=10, pady=(0, 6))
 
-        tk.Frame(self._sim_card, bg=BORDER, height=1).pack(fill="x")
+        # ── Bottom Control Dock ──
+        bot_bar = tk.Frame(main_content, bg=BG, height=80)
+        bot_bar.pack(fill="x", padx=20, pady=(10, 20))
+        bot_bar.pack_propagate(False)
 
-        # Stats row
-        stats_row = tk.Frame(self._sim_card, bg=BG3)
-        stats_row.pack(fill="x")
-        self.stat_faults = tk.StringVar(value="0")
-        self.stat_hits   = tk.StringVar(value="0")
-        self.stat_rate   = tk.StringVar(value="0%")
-        for var, lbl in [(self.stat_faults, "Page faults"),
-                         (self.stat_hits,   "Hits"),
-                         (self.stat_rate,   "Fault rate")]:
-            f = tk.Frame(stats_row, bg=BG3)
-            f.pack(side="left", expand=True)
-            tk.Label(f, textvariable=var, bg=BG3, fg=TEXT,
-                     font=("Segoe UI", 16, "bold"), pady=8).pack()
-            tk.Label(f, text=lbl, bg=BG3, fg=TEXT2,
-                     font=("Segoe UI", 9)).pack(pady=(0, 6))
+        bot_bar.columnconfigure(0, weight=1)
+        bot_bar.columnconfigure(1, weight=1)
+        bot_bar.columnconfigure(2, weight=1)
 
-        tk.Frame(self._sim_card, bg=BORDER, height=1).pack(fill="x")
+        left_dock = tk.Frame(bot_bar, bg=BG)
+        left_dock.grid(row=0, column=0, sticky="w", pady=15)
+        self.step_label = tk.Label(left_dock, text="Step 0 / 0", bg=BG, fg=TEXT2, font=("Segoe UI", 11, "bold"))
+        self.step_label.pack(side="left", padx=10)
 
-        # Step controls
-        step_row = tk.Frame(self._sim_card, bg=BG2)
-        step_row.pack(fill="x", padx=10, pady=8)
-        btn_kw = dict(bg=BG3, fg=TEXT, font=("Segoe UI", 10), relief="flat",
-                      padx=10, pady=4, cursor="hand2",
-                      activebackground=BORDER2, activeforeground=TEXT)
-        tk.Button(step_row, text="← Prev", command=self._prev, **btn_kw).pack(side="left", padx=2)
-        self.play_btn = tk.Button(step_row, text="▶ Play", command=self._toggle_play,
-                                  bg=BLUE, fg=WHITE, font=("Segoe UI", 10, "bold"),
-                                  relief="flat", padx=12, pady=4, cursor="hand2",
-                                  activebackground="#1A6BBF", activeforeground=WHITE)
-        self.play_btn.pack(side="left", padx=2)
-        tk.Button(step_row, text="Next →", command=self._next, **btn_kw).pack(side="left", padx=2)
-        self.step_label = tk.Label(step_row, text="Step 0 / 0", bg=BG2, fg=TEXT2,
-                                   font=("Segoe UI", 10))
-        self.step_label.pack(side="left", padx=8)
+        center_dock = tk.Frame(bot_bar, bg=BG)
+        center_dock.grid(row=0, column=1, pady=15)
 
-        # Combobox style
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("TCombobox", fieldbackground=BG2, background=BG2,
-                        foreground=TEXT, selectbackground=BG3,
-                        selectforeground=TEXT, arrowcolor=TEXT2, relief="flat")
-        style.map("TCombobox", fieldbackground=[("readonly", BG2)],
-                  foreground=[("readonly", TEXT)])
+        btn_kw = dict(bg=BG3, fg=TEXT, font=("Segoe UI", 12), relief="flat", width=4, pady=6, cursor="hand2", activebackground=BORDER2, activeforeground=TEXT, highlightthickness=1, highlightbackground=BORDER)
+        
+        self.btn_prev = tk.Button(center_dock, text="⏮", command=self._prev, **btn_kw)
+        self.btn_prev.pack(side="left", padx=4)
+        self._bind_hover(self.btn_prev, BG3, BORDER2)
+        
+        self.play_btn = tk.Button(center_dock, text="⏵", command=self._toggle_play, bg=MAGENTA, fg=BG, font=("Segoe UI", 12, "bold"), relief="flat", width=6, pady=6, cursor="hand2", activebackground="#1A6BBF", activeforeground=MAGENTA, highlightthickness=0)
+        self.play_btn.pack(side="left", padx=4)
+        self._bind_hover(self.play_btn, MAGENTA, MAGENTA_H, BG, BG)
+        
+        self.btn_next = tk.Button(center_dock, text="⏭", command=self._next, **btn_kw)
+        self.btn_next.pack(side="left", padx=4)
+        self._bind_hover(self.btn_next, BG3, BORDER2)
 
-    # ── Scroll region management ──────────────────────────────────────────────
+        right_dock = tk.Frame(bot_bar, bg=BG)
+        right_dock.grid(row=0, column=2, sticky="e", pady=15)
+        self.btn_dock_reset = tk.Button(right_dock, text="↺", command=self._compute_and_reset, **btn_kw)
+        self.btn_dock_reset.pack(side="right", padx=10)
+        self._bind_hover(self.btn_dock_reset, BG3, BORDER2)
+
     def _on_card_configure(self, event):
         self._scroll_canvas.configure(scrollregion=self._scroll_canvas.bbox("all"))
 
     def _on_canvas_configure(self, event):
         self._scroll_canvas.itemconfig(self._card_win, width=event.width)
 
-    # ── Tab styling ───────────────────────────────────────────────────────────
     def _style_tabs(self):
         for key, btn in self.tab_btns.items():
             if key == self.algo:
-                btn.configure(bg=BG3, fg=TEXT)
+                btn.configure(bg=MAGENTA, fg=BG) 
+                self._bind_hover(btn, MAGENTA, MAGENTA_H, BG, BG)
             else:
                 btn.configure(bg=BG, fg=TEXT2)
+                self._bind_hover(btn, BG, BG3, TEXT2, TEXT)
 
-    # ── Custom reference string ───────────────────────────────────────────────
     def _on_preset_selected(self, event=None):
-        self.custom_var.set("")          # clear custom field on preset change
+        self.custom_var.set("")          
         self._compute_and_reset()
 
     def _use_custom(self):
         raw = self.custom_var.get().strip()
-        if not raw:
-            return
+        if not raw: return
         try:
             parsed = [int(x.strip()) for x in raw.replace(" ", ",").split(",") if x.strip()]
-            if not parsed:
-                raise ValueError
+            if not parsed: raise ValueError
         except ValueError:
-            messagebox.showerror("Invalid input",
-                                 "Enter comma-separated integers, e.g.  1, 2, 3, 4, 1, 2")
+            messagebox.showerror("Invalid input", "Enter comma-separated integers, e.g.  1, 2, 3, 4, 1, 2")
             return
         self._stop_play()
         self.refs = parsed
-        self.ref_var.set("Custom")      # update dropdown label
-        if "Custom" not in self.ref_cb["values"]:
-            self.ref_cb["values"] = list(REF_STRINGS.keys()) + ["Custom"]
+        self.ref_var.set("Custom")      
+        if "Custom" not in self.ref_cb["values"]: self.ref_cb["values"] = list(REF_STRINGS.keys()) + ["Custom"]
         self.steps = compute(self.algo, self.refs, self.frames_count)
         self.cur = -1
         self.desc_var.set(DESCS[self.algo])
         self._render()
 
-    # ── Core logic ────────────────────────────────────────────────────────────
     def _set_algo(self, algo):
         self.algo = algo
         self._style_tabs()
@@ -434,12 +449,9 @@ class PageReplacementApp(tk.Frame):
     def _compute_and_reset(self):
         self._stop_play()
         key = self.ref_var.get()
-        if key != "Custom":
-            self.refs = REF_STRINGS.get(key, REF_STRINGS["Classic (7,0,1,2,0,3...)"])
-        try:
-            fc = int(self.frame_var.get())
-        except Exception:
-            fc = 3
+        if key != "Custom": self.refs = REF_STRINGS.get(key, REF_STRINGS["Classic (7,0,1,2,0,3...)"])
+        try: fc = int(self.frame_var.get())
+        except Exception: fc = 3
         self.frames_count = max(1, min(9, fc))
         self.steps = compute(self.algo, self.refs, self.frames_count)
         self.cur = -1
@@ -448,150 +460,149 @@ class PageReplacementApp(tk.Frame):
 
     def _render(self):
         is_counting = self.algo in ("lfu", "mfu")
-
-        if is_counting:
-            self._tally_wrapper.pack(fill="x")
-        else:
-            self._tally_wrapper.pack_forget()
+        if is_counting: self._tally_wrapper.pack(fill="x")
+        else: self._tally_wrapper.pack_forget()
 
         self._draw_ref_cells()
         self._draw_frame_grid()
-        if is_counting and self.cur >= 0:
-            self._draw_tally()
+        if is_counting and self.cur >= 0: self._draw_tally()
         self._update_info()
         self._update_stats()
 
-    # ── Canvas drawing ────────────────────────────────────────────────────────
+    # ── Canvas drawing ─────────────────────────────────
     def _draw_ref_cells(self):
         c = self.ref_canvas; c.delete("all")
         CELL = self.CELL; GAP = self.GAP; pad = 4
+        
         for i, r in enumerate(self.refs):
-            x = pad + i * (CELL + GAP); y = pad
+            x = pad + i * (CELL + GAP); y = pad + 4
+            
             if i == self.cur:
-                bg = GREEN if self.steps[self.cur]["hit"] else RED
-                fg = WHITE; outline = bg
+                base_bg = BG3; text_fg = TEXT; accent = CYAN if self.steps[self.cur]["hit"] else FAULT_COLOR
+                w = 2
             elif self.cur >= 0 and i < self.cur:
-                bg = RED if not self.steps[i]["hit"] else BG2
-                fg = WHITE if not self.steps[i]["hit"] else TEXT2
-                outline = RED if not self.steps[i]["hit"] else BORDER
+                base_bg = BG; text_fg = TEXT2; accent = CYAN if self.steps[i]["hit"] else FAULT_COLOR
+                w = 1
             else:
-                bg = BG2; fg = TEXT2; outline = BORDER
-            c.create_rectangle(x, y, x+CELL, y+CELL, fill=bg, outline=outline, width=1)
-            c.create_text(x+CELL//2, y+CELL//2, text=str(r), fill=fg,
-                          font=("Segoe UI", 11, "bold"))
+                base_bg = BG; text_fg = TEXT3; accent = BORDER
+                w = 1
+            
+            self._create_round_rect(c, x, y, x+CELL, y+CELL, radius=6, fill=base_bg, outline=accent, width=w)
+            c.create_text(x+CELL/2, y+CELL/2, text=str(r), fill=text_fg, font=("Segoe UI", 11, "bold"), justify="center")
+            
         total_w = pad + len(self.refs)*(CELL+GAP) + pad
-        c.configure(scrollregion=(0, 0, total_w, CELL+8), height=CELL+8)
+        c.configure(scrollregion=(0, 0, total_w, CELL+16), height=CELL+16)
 
     def _draw_frame_grid(self):
         c = self.frame_canvas; c.delete("all")
-        CELL = self.CELL; GAP = self.GAP; HDR = 16
+        CELL = self.CELL; GAP = self.GAP; HDR = 18
         n = self.frames_count; col_w = CELL+GAP; pad = 4
-        total_h = HDR + n*(CELL+GAP) + pad
+        total_h = HDR + n*(CELL+GAP) + pad + 8
 
         if self.cur < 0:
             x = pad
-            c.create_text(x+CELL//2, HDR//2, text="—", fill=TEXT3, font=("Segoe UI", 8))
+            c.create_text(x+CELL//2, HDR//2, text="—", fill=TEXT3, font=("Segoe UI", 8, "bold"))
             for f in range(n):
                 y = HDR + f*(CELL+GAP)
-                c.create_rectangle(x, y, x+CELL, y+CELL, fill=BG3, outline=BORDER, width=1)
-                c.create_text(x+CELL//2, y+CELL//2, text="—", fill=TEXT3, font=("Segoe UI", 10))
+                self._create_round_rect(c, x, y, x+CELL, y+CELL, radius=6, fill=BG, outline=BORDER, width=1)
+                c.create_text(x+CELL/2, y+CELL/2, text="—", fill=TEXT3, font=("Segoe UI", 10), justify="center")
             c.configure(scrollregion=(0, 0, pad+CELL+pad, total_h), height=total_h)
             return
 
         for step in range(self.cur + 1):
             s = self.steps[step]; x = pad + step*col_w
-            c.create_text(x+CELL//2, HDR//2, text=str(step+1), fill=TEXT3, font=("Segoe UI", 8))
+            
+            step_fg = CYAN if s["hit"] else FAULT_COLOR
+            c.create_text(x+CELL//2, HDR//2, text=str(step+1), fill=step_fg, font=("Segoe UI", 8, "bold"))
+            
+            is_hit_col = (step == self.cur and s["hit"])
+
             for f in range(n):
                 y = HDR + f*(CELL+GAP)
                 val = s["mem"][f] if f < len(s["mem"]) else None
+                w = 1
+                
                 if val is None:
-                    bg = BG3; fg = TEXT3; outline = BORDER; lbl = ""
+                    base_bg = BG; text_fg = TEXT3; accent = BORDER; lbl = ""
+                elif is_hit_col:
+                    base_bg = BG3; text_fg = CYAN; accent = CYAN; lbl = str(val); w=2
                 elif step == self.cur and not s["hit"] and val == s["page"]:
-                    bg = BLUE_LIGHT; fg = BLUE_DARK; outline = BLUE; lbl = str(val)
+                    base_bg = BG3; text_fg = TEXT; accent = MAGENTA; lbl = str(val); w=2
                 elif step == self.cur and val == s.get("victim") and s["victim"] is not None:
-                    bg = RED_LIGHT; fg = RED_DARK; outline = ORANGE; lbl = str(val)
+                    base_bg = BG; text_fg = ORANGE; accent = ORANGE; lbl = str(val); w=2
                 else:
-                    bg = BG3; fg = TEXT; outline = BORDER; lbl = str(val)
-                c.create_rectangle(x, y, x+CELL, y+CELL, fill=bg, outline=outline, width=1)
-                c.create_text(x+CELL//2, y+CELL//2, text=lbl, fill=fg,
-                              font=("Segoe UI", 11, "bold"))
+                    base_bg = BG; text_fg = TEXT; accent = BORDER2; lbl = str(val)
+
+                self._create_round_rect(c, x, y, x+CELL, y+CELL, radius=6, fill=base_bg, outline=accent, width=w)
+                if lbl != "":
+                    c.create_text(x+CELL/2, y+CELL/2, text=lbl, fill=text_fg, font=("Segoe UI", 11, "bold"), justify="center")
 
         total_w = pad + (self.cur+1)*col_w + pad
         c.configure(scrollregion=(0, 0, total_w, total_h), height=total_h)
 
     def _draw_tally(self):
-        for w in self.tally_inner.winfo_children():
-            w.destroy()
+        c = self.tally_canvas
+        c.delete("all")
         s = self.steps[self.cur]
         counts = s.get("counts") or {}
         if not counts: return
 
-        max_count = max(counts.values(), default=1) or 1
-        self.tally_label_var.set(
-            "REFERENCE COUNTS (lowest = victim)" if self.algo == "lfu"
-            else "REFERENCE COUNTS (highest = victim)")
+        lbl_strat = "(Lowest = Evict Target)" if self.algo == "lfu" else "(Highest = Evict Target)"
+        self.tally_label_var.set(f"REFERENCE COUNTS {lbl_strat}")
 
-        BAR_MAX_W = 300
-        for pg in sorted(counts.keys()):
+        CARD_W = 80
+        CARD_H = 66
+        GAP = 12
+        pad = 4
+
+        for i, pg in enumerate(sorted(counts.keys())):
             cnt = counts[pg]
-            in_mem   = pg in s["mem"]
+            in_mem    = pg in s["mem"]
             is_victim = pg == s.get("victim") and not s["hit"]
             is_cur    = pg == s["page"]
 
-            row = tk.Frame(self.tally_inner, bg=BG2)
-            row.pack(fill="x", pady=2)
+            x = pad + i * (CARD_W + GAP)
+            y = pad + 4
 
-            pg_box = tk.Frame(row, bg=BLUE_LIGHT if is_cur else BG3,
-                              width=28, height=28, highlightthickness=1,
-                              highlightbackground=BLUE if is_cur else BORDER)
-            pg_box.pack(side="left", padx=(0, 6))
-            pg_box.pack_propagate(False)
-            tk.Label(pg_box, text=str(pg),
-                     bg=BLUE_LIGHT if is_cur else BG3,
-                     fg=BLUE_DARK if is_cur else TEXT,
-                     font=("Segoe UI", 10, "bold")).place(relx=0.5, rely=0.5, anchor="center")
-
-            bar_wrap = tk.Frame(row, bg=BG3, height=20, highlightthickness=1,
-                                highlightbackground=BORDER)
-            bar_wrap.pack(side="left", fill="x", expand=True, padx=(0, 6))
-            bar_wrap.pack_propagate(False)
-
-            bar_color = (ORANGE   if is_victim else
-                         BAR_GREEN if is_cur and not is_victim else
-                         BLUE      if in_mem else BAR_GRAY)
-            text_col = BLUE_DARK if in_mem and not is_victim else "#CCCCCC"
-            bar_w = max(4, int((cnt / max_count) * BAR_MAX_W))
-
-            bar = tk.Frame(bar_wrap, bg=bar_color, height=20)
-            bar.place(x=0, y=0, width=bar_w, height=20)
-            tk.Label(bar, text="■"*cnt, bg=bar_color, fg=text_col,
-                     font=("Segoe UI", 8)).place(x=4, y=2)
-
-            tk.Label(row, text=str(cnt), bg=BG2, fg=TEXT2,
-                     font=("Segoe UI", 10), width=3, anchor="e").pack(side="left", padx=(0, 4))
             if is_victim:
-                tk.Label(row, text="← evicted", bg=BG2, fg=RED,
-                         font=("Segoe UI", 9, "bold")).pack(side="left")
+                bg = BG; accent = ORANGE; lbl_stat = "EVICT"; w=2
             elif is_cur and not is_victim:
-                tk.Label(row, text="← current", bg=BG2, fg=GREEN,
-                         font=("Segoe UI", 9)).pack(side="left")
+                bg = BG3; accent = CYAN; lbl_stat = "CURRENT"; w=2
+            elif in_mem:
+                bg = BG; accent = MAGENTA; lbl_stat = "IN MEM"; w=1
+            else:
+                bg = BG; accent = BORDER; lbl_stat = "IDLE"; w=1
+
+            self._create_round_rect(c, x, y, x+CARD_W, y+CARD_H, radius=6, fill=bg, outline=accent, width=w)
+            c.create_rectangle(x, y, x+CARD_W, y+4, fill=accent if in_mem else BORDER2, outline="")
+            c.create_text(x+CARD_W/2, y+30, text=str(cnt), fill=TEXT, font=("Segoe UI", 22, "bold"), justify="center")
+            c.create_text(x+CARD_W/2, y+52, text=f"PG {pg} • {lbl_stat}", fill=accent if in_mem else TEXT3, font=("Segoe UI", 7, "bold"), justify="center")
+
+        total_w = pad + len(counts)*(CARD_W+GAP) + pad
+        c.configure(scrollregion=(0, 0, total_w, CARD_H+16), height=CARD_H+16)
 
     def _update_info(self):
-        if self.cur < 0:
-            self.info_var.set("Press step or play to begin."); return
+        if self.cur < 0: 
+            self.status_pill.config(text="WAIT", bg=BG3, fg=TEXT2)
+            self.status_frame.config(highlightbackground=BORDER)
+            self.info_var.set("SYSTEM IDLE  —  Awaiting trace execution.")
+            return
+            
         s = self.steps[self.cur]
         if s["hit"]:
-            msg = f"✓  Page {s['page']} is in memory — hit, no fault."
+            self.status_pill.config(text="HIT", bg=CYAN, fg=BG)
+            self.status_frame.config(highlightbackground=CYAN)
+            msg = f"Page {s['page']} is already in memory."
         elif s["victim"] is not None:
-            msg = f"✗  Page fault! Page {s['page']} not in memory. Evicted page {s['victim']}."
+            self.status_pill.config(text="FAULT", bg=FAULT_COLOR, fg=BG)
+            self.status_frame.config(highlightbackground=FAULT_COLOR)
+            msg = f"Page {s['page']} requested. Evicted Page {s['victim']}."
         else:
-            msg = f"✗  Page fault! Page {s['page']} loaded into empty frame."
-        if self.algo == "second" and s.get("bits"):
-            msg += f"  Reference bits: [{', '.join(str(b) for b in s['bits'])}]"
-        if self.algo in ("lfu","mfu") and s.get("counts") and not s["hit"] and s["victim"] is not None:
-            in_mem_p = [p for p in s["mem"] if p is not None]
-            counts_str = ", ".join("{}({})".format(p, s["counts"].get(p, 0)) for p in in_mem_p)
-            msg += f"  Counts in memory: {counts_str}."
+            self.status_pill.config(text="FAULT", bg=FAULT_COLOR, fg=BG)
+            self.status_frame.config(highlightbackground=FAULT_COLOR)
+            msg = f"Page {s['page']} loaded into an empty frame."
+            
+        if self.algo == "second" and s.get("bits"): msg += f" (Bits: [{', '.join(str(b) for b in s['bits'])}])"
         self.info_var.set(msg)
 
     def _update_stats(self):
@@ -601,10 +612,10 @@ class PageReplacementApp(tk.Frame):
         total  = len(shown)
         self.stat_faults.set(str(faults))
         self.stat_hits.set(str(hits))
+        self.stat_total.set(str(total))
         self.stat_rate.set(f"{round(faults/total*100)}%" if total else "0%")
         self.step_label.configure(text=f"Step {max(0, self.cur+1)} / {len(self.steps)}")
 
-    # ── Navigation ────────────────────────────────────────────────────────────
     def _next(self):
         if self.cur < len(self.steps)-1: self.cur += 1; self._render()
         else: self._stop_play()
@@ -619,13 +630,15 @@ class PageReplacementApp(tk.Frame):
 
     def _start_play(self):
         self._playing = True
-        self.play_btn.configure(text="⏸ Pause", bg=RED)
+        self.play_btn.configure(text="⏸", bg=FAULT_COLOR, fg=BG)
+        self._bind_hover(self.play_btn, FAULT_COLOR, FAULT_COLOR_H, BG, BG)
         self._tick()
 
     def _stop_play(self):
         self._playing = False
         if self._timer: self.after_cancel(self._timer); self._timer = None
-        self.play_btn.configure(text="▶ Play", bg=BLUE)
+        self.play_btn.configure(text="⏵", bg=MAGENTA, fg=BG)
+        self._bind_hover(self.play_btn, MAGENTA, MAGENTA_H, BG, BG)
 
     def _tick(self):
         if not self._playing: return
@@ -635,11 +648,10 @@ class PageReplacementApp(tk.Frame):
         else:
             self._stop_play()
 
-
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("Page Replacement Algorithm Simulator")
-    root.minsize(720, 600)
+    root.minsize(1050, 700)
     root.configure(bg=BG)
     app = PageReplacementApp(root)
     app.pack(fill="both", expand=True)
