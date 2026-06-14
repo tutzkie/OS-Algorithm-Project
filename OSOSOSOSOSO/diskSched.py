@@ -6,16 +6,22 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import math
 
-# ─── Palette ───────────────────────────────────────────────────────────────────
-BG         = "#ffffff"
-BG2        = "#f5f5f5"
-TEXT       = "#1a1a1a"
-TEXT2      = "#666666"
-BORDER     = "#d0d0d0"
-INFO_BG    = "#e8f0fe"
-INFO_TEXT  = "#1a56db"
-INFO_BDR   = "#93bbe8"
-ACCENT     = "#378ADD"
+# ─── Palette (hub dark theme) ─────────────────────────────────────────────────
+BG = "#0a0a0a"
+BG2 = "#141414"
+TEXT = "#e8e8e8"
+TEXT2 = "#7a7a7a"
+BORDER = "#2a2a2a"
+
+# Dark-yellow accent: use ONLY for active/selected/highlight states.
+ACCENT = "#F5A023"
+ACCENT_BG = "#2a1a05"   # subtle dark background for highlight states
+ACCENT_FG = ACCENT
+
+# Neutral dark values for non-accent UI pieces
+INFO_BG = BG2
+INFO_TEXT = TEXT
+INFO_BDR = BORDER
 
 # ─── Algorithm logic (ported from JS) ──────────────────────────────────────────
 
@@ -194,45 +200,115 @@ class DiskSchedulingApp(tk.Frame):
                       highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACCENT)
         e4.pack(ipady=4, padx=1)
 
-        # ── Algorithm buttons ──────────────────────────────────────────────────
-        algo_row = tk.Frame(outer, bg=BG)
-        algo_row.pack(fill="x", pady=(0, 10))
+        # ── Algorithm buttons (structured grid) ───────────────────────────────
+        algo_frame = tk.Frame(outer, bg=BG)
+        algo_frame.pack(fill="x", pady=(0, 10))
 
         self._algo_btns = {}
-        for name in ["fcfs", "sstf", "scan", "cscan", "look", "clook"]:
-            b = tk.Button(algo_row, text=name.upper(), font=("Segoe UI", 9),
-                          relief="flat", cursor="hand2",
-                          padx=10, pady=4,
-                          command=lambda n=name: self._select_algo(n))
-            b.pack(side="left", padx=(0, 5))
+        algo_names = ["fcfs", "sstf", "scan", "cscan", "look", "clook"]
+        cols = 3
+
+        # uniform button sizing/style
+        btn_font = ("Segoe UI", 10, "bold")
+        for i, name in enumerate(algo_names):
+            r = i // cols
+            c = i % cols
+            b = tk.Button(
+                algo_frame,
+                text=name.upper(),
+                font=btn_font,
+                relief="flat",
+                cursor="hand2",
+                padx=14,
+                pady=7,
+                width=12,
+                bg=BG2,
+                fg=TEXT2,
+                activebackground=ACCENT_BG,
+                activeforeground=ACCENT_FG,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+                highlightcolor=ACCENT,
+                borderwidth=0,
+                takefocus=True,
+                command=lambda n=name: self._select_algo(n),
+            )
+            b.grid(row=r, column=c, padx=6, pady=4, sticky="ew")
             self._algo_btns[name] = b
+
+        for c in range(cols):
+            algo_frame.grid_columnconfigure(c, weight=1)
+
         self._select_algo("fcfs", init=True)
 
-        # ── Action buttons ─────────────────────────────────────────────────────
-        act_row = tk.Frame(outer, bg=BG)
-        act_row.pack(fill="x", pady=(0, 12))
+        # ── Action buttons (grouped grid) ─────────────────────────────────────
+        act_frame = tk.Frame(outer, bg=BG)
+        act_frame.pack(fill="x", pady=(0, 12))
+        act_frame.grid_columnconfigure((0, 1, 2), weight=1, uniform="act")
 
-        self.btn_start = tk.Button(act_row, text="▶  Start", font=("Segoe UI", 10),
-                                   relief="flat", cursor="hand2", padx=14, pady=5,
-                                   bg=INFO_BG, fg=INFO_TEXT,
-                                   activebackground=INFO_BG, activeforeground=INFO_TEXT,
-                                   command=self.start_sim)
-        self.btn_start.pack(side="left", padx=(0, 7))
+        self.btn_start = tk.Button(
+            act_frame,
+            text="▶  Start",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            cursor="hand2",
+            padx=16,
+            pady=7,
+            bg=ACCENT_BG,
+            fg=ACCENT_FG,
+            activebackground=ACCENT_BG,
+            activeforeground=ACCENT_FG,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+            borderwidth=0,
+            takefocus=True,
+            command=self.start_sim,
+        )
+        self.btn_start.grid(row=0, column=0, padx=6, pady=4, sticky="ew")
 
-        self.btn_step = tk.Button(act_row, text="→  Next step", font=("Segoe UI", 10),
-                                  relief="flat", cursor="hand2", padx=14, pady=5,
-                                  bg=BG2, fg=TEXT,
-                                  activebackground=BG2, activeforeground=TEXT,
-                                  state="disabled",
-                                  command=self.do_step)
-        self.btn_step.pack(side="left", padx=(0, 7))
+        self.btn_step = tk.Button(
+            act_frame,
+            text="→  Next step",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            cursor="hand2",
+            padx=16,
+            pady=7,
+            bg=BG2,
+            fg=TEXT,
+            activebackground=ACCENT_BG,
+            activeforeground=ACCENT_FG,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+            borderwidth=0,
+            takefocus=True,
+            state="disabled",
+            command=self.do_step,
+        )
+        self.btn_step.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
 
-        self.btn_reset = tk.Button(act_row, text="↺  Reset", font=("Segoe UI", 10),
-                                   relief="flat", cursor="hand2", padx=14, pady=5,
-                                   bg=BG2, fg=TEXT,
-                                   activebackground=BG2, activeforeground=TEXT,
-                                   command=self.reset_sim)
-        self.btn_reset.pack(side="left")
+        self.btn_reset = tk.Button(
+            act_frame,
+            text="↺  Reset",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            cursor="hand2",
+            padx=16,
+            pady=7,
+            bg=BG2,
+            fg=TEXT,
+            activebackground=ACCENT_BG,
+            activeforeground=ACCENT_FG,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+            borderwidth=0,
+            takefocus=True,
+            command=self.reset_sim,
+        )
+        self.btn_reset.grid(row=0, column=2, padx=6, pady=4, sticky="ew")
 
         # ── Stats row ──────────────────────────────────────────────────────────
         stats_row = tk.Frame(outer, bg=BG)
@@ -359,11 +435,22 @@ class DiskSchedulingApp(tk.Frame):
         self.algo.set(name)
         for n, b in self._algo_btns.items():
             if n == name:
-                b.configure(bg=INFO_BG, fg=INFO_TEXT,
-                            activebackground=INFO_BG, activeforeground=INFO_TEXT)
+                # Selected/highlight state uses dark-yellow accent.
+                b.configure(
+                    bg=ACCENT_BG,
+                    fg=ACCENT_FG,
+                    activebackground=ACCENT_BG,
+                    activeforeground=ACCENT_FG,
+                )
             else:
-                b.configure(bg=BG2, fg=TEXT2,
-                            activebackground=BG2, activeforeground=TEXT2)
+                # Non-selected stays neutral; accent only on active/hover via button's activebackground.
+                b.configure(
+                    bg=BG2,
+                    fg=TEXT2,
+                    activebackground=ACCENT_BG,
+                    activeforeground=ACCENT_FG,
+                )
+
         needs_dir = name in ("scan", "look")
         if not init:
             if needs_dir:
