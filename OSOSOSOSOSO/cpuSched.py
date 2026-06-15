@@ -2,15 +2,17 @@ import tkinter as tk
 import copy
 
 # ── palette ──────────────────────────────────────────────────────────────────
-PC     = ['#5B8DF5','#F5A023','#22C55E','#F05070','#A855F7','#EAB308','#06B6D4','#F97316']
-BG     = '#0f0f0f'
-BG2    = '#181818'
+PC     = ['#5B8DF5','#3B82F6','#60A5FA','#2563EB','#1D4ED8','#93C5FD','#38BDF8','#0EA5E9']
+BG     = '#0a0a0a'
+BG2    = '#141414'
 BORD   = '#2a2a2a'
-TXT    = '#e0e0e0'
-TXT2   = '#888888'
-TXT3   = '#444444'
-ST_COL = {'waiting':'#555555','ready':'#F5A023','running':'#22C55E','finished':'#5B8DF5'}
-CW, CH = 26, 22
+TXT    = '#e8e8e8'
+TXT2   = '#7a7a7a'
+TXT3   = '#4a4a4a'
+ACCENT = '#5B8DF5'
+ACCENT_BG = '#141d2a'
+ST_COL = {'waiting': '#555555', 'ready':   ACCENT, 'running': '#22C55E', 'finished':'#3B82F6'}
+CW, CH = 38, 32
 
 ALGOS = [
     ('FCFS',           'FCFS',      False),
@@ -102,62 +104,125 @@ class App(tk.Frame):
     # FULL RENDER  –  called only on: app start, reset, algo change, proc edits
     # ─────────────────────────────────────────────────────────────────────────
     def _render(self):
-        # clear live-widget refs so stale handles aren't used
-        self._step_btn = self._step_lbl = None
-        self._card_clock = self._card_running = None
-        self._queue_row  = None
-        self._card_tq_frame = self._card_tq_val = None
-        self._row_widgets   = {}
-        self._gantt_canvas  = self._gantt_hsb = self._gantt_outer = None
-        self._stats_outer   = None
-
         for w in self.f.winfo_children():
             w.destroy()
-        P = 20
+
+        P = 18
+
 
         # ── header ────────────────────────────────────────────────────────────
         hf = tk.Frame(self.f, bg=BG)
         hf.pack(fill='x', padx=P, pady=(16,10))
-        tk.Label(hf, text='CPU SCHEDULING SIMULATOR', bg=BG, fg=TXT3,
-                 font=('Courier New',9)).pack(side='left')
+        tk.Label(hf, text='CPU SCHEDULING SIMULATOR', bg=BG, fg=ACCENT,
+         font=('Segoe UI', 10, 'bold'))
         if self.sim:
             tk.Label(hf, text=f' {ALGO_LABELS[self.algo]} ', bg=BG, fg='#5B8DF5',
-                     font=('Courier New',9), bd=1, relief='solid').pack(side='left', padx=8)
+                     font=('Segoe UI', 10), bd=1, relief='solid').pack(side='left', padx=8)
 
         # ── algo buttons ──────────────────────────────────────────────────────
-        for row_keys in [['FCFS','SJF','SRTF','RR'], ['Priority','PriorityP']]:
-            af = tk.Frame(self.f, bg=BG)
-            af.pack(fill='x', padx=P, pady=(0,4))
-            for key in row_keys:
-                active = (key == self.algo)
-                is_pre = key in ('SRTF','RR','PriorityP')
-                abg = '#5B8DF5' if (active and is_pre) else (TXT if active else BG)
-                afg = BG if active else TXT2
-                tk.Button(af, text=ALGO_LABELS[key], font=('Courier New',9),
-                    bg=abg, fg=afg, relief='solid', bd=1,
-                    highlightbackground=BORD, padx=8, pady=3,
-                    cursor='hand2' if not self.sim else 'arrow',
-                    command=(lambda _k=key: self._set_algo(_k)) if not self.sim else None
-                ).pack(side='left', padx=(0,4))
-            if 'RR' in row_keys and self.algo == 'RR':
-                tk.Label(af, text='TQ =', bg=BG, fg=TXT2,
-                         font=('Courier New',9)).pack(side='left', padx=(8,2))
-                sv = tk.StringVar(value=str(self.tq))
-                sp = tk.Spinbox(af, from_=1, to=20, width=4, textvariable=sv,
-                                font=('Courier New',10), bg=BG2, fg=TXT,
-                                insertbackground=TXT, relief='flat',
-                                state='normal' if not self.sim else 'disabled')
-                sp.bind('<FocusOut>',  lambda e, v=sv: self._set_tq(v.get()))
-                sp.bind('<<Modified>>',lambda e, v=sv: self._set_tq(v.get()))
-                sp.pack(side='left')
+        af = tk.Frame(self.f, bg=BG)
+        af.pack(fill='x', padx=P, pady=(0,6))
+
+        top_row = ['FCFS', 'SJF', 'SRTF']
+        bottom_row = ['RR', 'Priority', 'PriorityP']
+
+        btns = {}
+
+        def make_btn(parent, key):
+            active = (key == self.algo)
+
+            btn = tk.Button(
+                parent,
+                text=ALGO_LABELS[key],
+                font=('Segoe UI', 11, 'bold'),   
+
+                bg=ACCENT_BG if active else BG2,
+                fg=ACCENT if active else TXT2,
+
+                activebackground=ACCENT_BG,
+                activeforeground=ACCENT,
+
+                relief='flat',
+                bd=0,
+
+                width=18,   
+                height=2,   
+
+                cursor='hand2' if not self.sim else 'arrow',
+                command=(lambda k=key: self._set_algo(k)) if not self.sim else None
+            )
+            return btn
+
+
+        # ── top row
+        top = tk.Frame(af, bg=BG)
+        top.pack(fill='x', pady=(0,6))
+
+        for k in top_row:
+            b = make_btn(top, k)
+            b.pack(side='left', expand=True, fill='both', padx=6, pady=4)
+            btns[k] = b
+
+
+        # ── bottom row
+        bottom = tk.Frame(af, bg=BG)
+        bottom.pack(fill='x')
+
+        for k in bottom_row:
+            b = make_btn(bottom, k)
+            b.pack(side='left', expand=True, fill='both', padx=6, pady=4)
+            btns[k] = b
+
+
+        self._algo_buttons = btns
+
+        # RR TQ
+        self._rr_tq_frame = tk.Frame(self.f, bg=BG)
+        self._rr_tq_frame.pack(fill='x', padx=P, pady=(0,6))
+
+        if self.algo == 'RR':
+            box = tk.Frame(
+                self._rr_tq_frame,
+                bg=BG2,
+                highlightthickness=1,
+                highlightbackground=ACCENT
+            )
+            box.pack(anchor='w', padx=2)
+
+            tk.Label(
+                box,
+                text='TIME QUANTUM',
+                bg=BG2,
+                fg=TXT2,
+                font=('Segoe UI', 9, 'bold'),
+                padx=10,
+                pady=4
+            ).pack(side='left')
+
+            sv = tk.StringVar(value=str(self.tq))
+            sp = tk.Spinbox(
+                box,
+                from_=1, to=20,
+                width=4,
+                textvariable=sv,
+                font=('Segoe UI', 10),
+                bg=BG,
+                fg=TXT,
+                insertbackground=TXT,
+                relief='flat',
+                state='normal' if not self.sim else 'disabled'
+            )
+            sp.pack(side='left', padx=6)
+
+            sp.bind('<FocusOut>', lambda e, v=sv: self._set_tq(v.get()))
 
         # legend
         lf = tk.Frame(self.f, bg=BG)
         lf.pack(fill='x', padx=P, pady=(0,8))
         tk.Label(lf, text='● Non-preemptive', bg=BG, fg=TXT3,
-                 font=('Courier New',8)).pack(side='left', padx=(0,12))
-        tk.Label(lf, text='● Preemptive', bg=BG, fg='#5B8DF5',
-                 font=('Courier New',8)).pack(side='left')
+                 font=('Segoe UI', 10)).pack(side='left', padx=(0,12))
+        tk.Label(lf, text='● Preemptive', bg=BG, fg=ACCENT,
+                 font=('Segoe UI', 10)).pack(side='left')
 
         # ── process table ─────────────────────────────────────────────────────
         self._build_table(P)
@@ -166,28 +231,49 @@ class App(tk.Frame):
         bf = tk.Frame(self.f, bg=BG)
         bf.pack(fill='x', padx=P, pady=(0,14))
         if not self.sim:
-            tk.Button(bf, text='▶  START', font=('Courier New',11,'bold'),
-                bg=TXT, fg=BG, relief='flat', padx=18, pady=8,
+            tk.Button(bf, text='▶  START', font=('Segoe UI', 10,'bold'),
+                bg=BG2, fg=ACCENT, activebackground=ACCENT_BG, activeforeground=ACCENT, relief='flat', padx=18, pady=8,
                 cursor='hand2', command=self._init_sim).pack(side='left')
         else:
             done = self.sim['done']
-            self._step_btn = tk.Button(bf,
-                text='■  DONE' if done else f'⏭  STEP   t = {self.sim["t"]} →',
-                font=('Courier New',11,'bold'),
-                bg=BG2 if done else TXT, fg=TXT3 if done else BG,
-                relief='flat', padx=22, pady=8,
-                state='disabled' if done else 'normal',
-                cursor='arrow' if done else 'hand2',
+            self._step_btn = tk.Button(
+                bf,
+                text='⏭  STEP   t = ' + str(self.sim["t"]) + ' →' if not self.sim['done'] else '■  DONE',
+
+                font=('Segoe UI', 11, 'bold'),
+
+                bg=ACCENT_BG,         
+                fg=ACCENT,           
+
+                activebackground='#22324a',
+                activeforeground='#7dd3fc',
+
+                relief='flat',
+                bd=0,
+
+                padx=28,
+                pady=10,
+
+                cursor='hand2' if not self.sim['done'] else 'arrow',
+
+                state='normal' if not self.sim['done'] else 'disabled',
+
                 command=self._step)
+            
+            self._step_btn.configure(
+                highlightthickness=2,
+                highlightbackground=ACCENT,
+                highlightcolor=ACCENT)
+            
             self._step_btn.pack(side='left')
-            tk.Button(bf, text='↺  RESET', font=('Courier New',9),
-                bg=BG, fg=TXT2, relief='solid', bd=1,
+            tk.Button(bf, text='↺  RESET', font=('Segoe UI', 10),
+                bg=BG2, fg=TXT2, relief='flat', bd=0,
                 highlightbackground=BORD, padx=12, pady=8,
                 cursor='hand2', command=self._reset).pack(side='left', padx=8)
             lbl = '✓  All processes finished' if done else '— or press Space'
             self._step_lbl = tk.Label(bf, text=lbl, bg=BG,
                 fg='#22C55E' if done else TXT3,
-                font=('Courier New', 10 if done else 9))
+                font=('Segoe UI', 11 if done else 10))
             self._step_lbl.pack(side='left', padx=4)
 
         # ── sim-only sections (built once, updated in-place) ──────────────────
@@ -210,75 +296,97 @@ class App(tk.Frame):
         cont.pack(fill='x')
 
         cols = ['PID','ARRIVAL','BURST','PRIORITY'] + (['REM.','STATE'] if running else [])
-        cw   = [7,9,7,9,6,11]
-
         hrow = tk.Frame(cont, bg=BG2)
         hrow.pack(fill='x')
-        for ci,h in enumerate(cols):
-            tk.Label(hrow, text=h, bg=BG2, fg=TXT3,
-                     font=('Courier New',8), width=cw[ci],
-                     anchor='w', padx=8, pady=5).grid(row=0, column=ci, sticky='w')
+
+        col_widths = [10, 12, 10, 12, 8, 12]  # 👈 better spacing
+
+        for ci, h in enumerate(cols):
+            lbl = tk.Label(
+                hrow,
+                text=h,
+                bg=BG2,
+                fg=TXT2,
+                font=('Segoe UI', 10, 'bold'),
+                anchor='center'
+            )
+            lbl.grid(row=0, column=ci, padx=6, pady=6, sticky='nsew')
+
+            hrow.grid_columnconfigure(ci, weight=1)
 
         for i, p in enumerate(self.procs):
-            col = pcol(self.procs, p['id'])
-            ps  = self.sim['ps'][p['id']] if self.sim else None
+            ps = self.sim['ps'][p['id']] if self.sim else None
+
             tk.Frame(cont, bg=BORD, height=1).pack(fill='x')
+
             row = tk.Frame(cont, bg=BG)
             row.pack(fill='x')
 
-            df = tk.Frame(row, bg=BG)
-            df.pack(side='left', padx=(8,4), pady=5)
-            dot = tk.Canvas(df, width=9, height=9, bg=BG, highlightthickness=0)
-            dot.pack(side='left', padx=(0,5))
-            dot.create_rectangle(1,1,8,8, fill=col, outline=col)
-            if running:
-                tk.Label(df, text=p['id'], bg=BG, fg=TXT,
-                         font=('Courier New',10), width=5, anchor='w').pack(side='left')
-            else:
-                e = tk.Entry(df, width=5, bg=BG, fg=TXT, insertbackground=TXT,
-                             relief='flat', font=('Courier New',10))
-                e.insert(0, p['id'])
-                e.bind('<FocusOut>', lambda ev, idx=i: self._upd_id(idx, ev.widget.get()))
-                e.pack(side='left')
+            # make grid columns stretch evenly
+            for c in range(6):
+                row.grid_columnconfigure(c, weight=1)
 
-            for fld in ['at','bt','pr']:
-                cf = tk.Frame(row, bg=BG)
-                cf.pack(side='left', padx=6)
-                if running:
-                    tk.Label(cf, text=str(p[fld]), bg=BG, fg=TXT,
-                             font=('Courier New',10), width=6, anchor='w').pack()
-                else:
-                    e2 = tk.Entry(cf, width=5, bg=BG, fg=TXT, insertbackground=TXT,
-                                  relief='flat', font=('Courier New',10))
-                    e2.insert(0, str(p[fld]))
-                    e2.bind('<FocusOut>', lambda ev, idx=i, f=fld:
-                            self._upd_num(idx, f, ev.widget.get()))
-                    e2.pack()
+            # ── PID ─────────────────────────────
+            tk.Label(
+                row,
+                text=p['id'],
+                bg=BG,
+                fg=TXT,
+                font=('Segoe UI', 10, 'bold'),
+                anchor='center'
+            ).grid(row=0, column=0, sticky='nsew', padx=6, pady=6)
 
+            # ── ARRIVAL / BURST / PRIORITY ─────
+            for ci, fld in enumerate(['at', 'bt', 'pr']):
+                tk.Label(
+                    row,
+                    text=str(p[fld]),
+                    bg=BG,
+                    fg=TXT,
+                    font=('Segoe UI', 10),
+                    anchor='center'
+                ).grid(row=0, column=ci + 1, sticky='nsew', padx=6, pady=6)
+
+            # ── REMAINING + STATE (only when sim is running) ─────
             if ps:
-                rem_col = TXT3 if ps['rem'] == 0 else TXT
-                fw = 'bold' if ps['state'] == 'running' else 'normal'
-                rem_lbl = tk.Label(row, text=str(ps['rem']), bg=BG, fg=rem_col,
-                                   font=('Courier New',10,fw), width=5, anchor='w')
-                rem_lbl.pack(side='left', padx=6)
-                sc = ST_COL[ps['state']]
-                st_lbl = tk.Label(row,
+                rem_lbl = tk.Label(
+                    row,
+                    text=str(ps['rem']),
+                    bg=BG,
+                    fg=TXT,
+                    font=('Segoe UI', 10),
+                    anchor='center'
+                )
+                rem_lbl.grid(row=0, column=4, sticky='nsew', padx=6, pady=6)
+
+                st_lbl = tk.Label(
+                    row,
                     text=ps['state'].upper() + (' ▶' if ps['state'] == 'running' else ''),
-                    bg=blend(sc,0.20), fg=sc,
-                    font=('Courier New',8), padx=6, pady=2)
-                st_lbl.pack(side='left', padx=4)
-                self._row_widgets[p['id']] = {'rem': rem_lbl, 'state': st_lbl}
+                    bg=BG2,
+                    fg=ST_COL[ps['state']],
+                    font=('Segoe UI', 10, 'bold'),
+                    padx=6,
+                    pady=3
+                )
+                st_lbl.grid(row=0, column=5, sticky='nsew', padx=6, pady=6)
 
-            if not running:
-                tk.Button(row, text='×', bg=BG, fg=TXT3, relief='flat',
-                          font=('Courier New',14), cursor='hand2',
-                          command=lambda idx=i: self._del_proc(idx)).pack(side='right', padx=6)
+                self._row_widgets[p['id']] = {
+                    'rem': rem_lbl,
+                    'state': st_lbl
+                }
 
-        if not running:
-            tk.Frame(cont, bg=BORD, height=1).pack(fill='x')
-            tk.Button(cont, text='+ ADD PROCESS', bg=BG, fg=TXT3,
-                      font=('Courier New',9), relief='flat', pady=7,
-                      cursor='hand2', command=self._add_proc).pack(fill='x')
+            # ── DELETE BUTTON (only before simulation) ─────
+            if not self.sim:
+                tk.Button(
+                    row,
+                    text='×',
+                    bg=BG,
+                    fg=TXT2,
+                    relief='flat',
+                    font=('Segoe UI', 10),
+                    cursor='hand2',
+                    command=lambda idx=i: self._del_proc(idx)
+                ).grid(row=0, column=6, padx=6, pady=6)
 
     # ── status cards (built once) ─────────────────────────────────────────────
     def _build_cards(self, P):
@@ -289,9 +397,9 @@ class App(tk.Frame):
             c = tk.Frame(cf, bg=BG2, highlightbackground=BORD, highlightthickness=1)
             c.pack(side='left', fill='both', expand=True, padx=(0,8))
             tk.Label(c, text=label, bg=BG2, fg=TXT3,
-                     font=('Courier New',8), anchor='w', padx=10).pack(fill='x', pady=(6,0))
+                     font=('Segoe UI', 10), anchor='w', padx=10).pack(fill='x', pady=(6,0))
             v = tk.Label(c, text=str(value), bg=BG2, fg=fg,
-                         font=('Courier New',fs,'bold'), anchor='w', padx=10)
+                         font=('Segoe UI',fs,'bold'), anchor='w', padx=10)
             v.pack(fill='x', pady=(2,8))
             return v
 
@@ -305,7 +413,7 @@ class App(tk.Frame):
         qc = tk.Frame(cf, bg=BG2, highlightbackground=BORD, highlightthickness=1)
         qc.pack(side='left', fill='both', expand=True, padx=(0,8))
         tk.Label(qc, text='READY QUEUE', bg=BG2, fg=TXT3,
-                 font=('Courier New',8), anchor='w', padx=10).pack(fill='x', pady=(6,0))
+                 font=('Segoe UI', 10), anchor='w', padx=10).pack(fill='x', pady=(6,0))
         self._queue_row = tk.Frame(qc, bg=BG2)
         self._queue_row.pack(fill='x', padx=10, pady=(2,8))
         self._redraw_queue()
@@ -316,11 +424,11 @@ class App(tk.Frame):
                                            highlightbackground=BORD, highlightthickness=1)
             self._card_tq_frame.pack(side='left', fill='both', expand=True, padx=(0,8))
             tk.Label(self._card_tq_frame, text='TQ LEFT', bg=BG2, fg=TXT3,
-                     font=('Courier New',8), anchor='w', padx=10
+                     font=('Segoe UI', 10), anchor='w', padx=10
                      ).pack(fill='x', pady=(6,0))
             self._card_tq_val = tk.Label(self._card_tq_frame,
                 text=str(self.sim['tqLeft']), bg=BG2, fg='#F5A023',
-                font=('Courier New',20,'bold'), anchor='w', padx=10)
+                font=('Segoe UI', 10,'bold'), anchor='w', padx=10)
             self._card_tq_val.pack(fill='x', pady=(2,8))
 
     def _redraw_queue(self):
@@ -330,29 +438,29 @@ class App(tk.Frame):
         q = self.sim['q']
         if not q:
             tk.Label(self._queue_row, text='[ empty ]', bg=BG2, fg=TXT3,
-                     font=('Courier New',11)).pack(side='left')
+                     font=('Segoe UI', 10)).pack(side='left')
         else:
             for j, pid in enumerate(q):
                 tk.Label(self._queue_row, text=pid, bg=BG2,
                          fg=pcol(self.procs,pid),
-                         font=('Courier New',11,'bold')).pack(side='left')
+                         font=('Segoe UI', 10,'bold')).pack(side='left')
                 if j < len(q)-1:
                     tk.Label(self._queue_row, text=' → ', bg=BG2, fg=TXT3,
-                             font=('Courier New',11)).pack(side='left')
+                             font=('Segoe UI', 10)).pack(side='left')
 
     # ── gantt shell (built once, canvas redrawn each step) ────────────────────
     def _build_gantt_shell(self, P):
         n     = len(self.procs)
-        ROW_H = 30
-        TOP   = 18
-        cv_h  = TOP + n*ROW_H + 8
+        ROW_H = 45
+        TOP   = 28
+        cv_h  = TOP + n*ROW_H + 20
 
         outer = tk.Frame(self.f, bg=BG2, highlightbackground=BORD, highlightthickness=1)
         outer.pack(fill='x', padx=P, pady=(0,10))
         self._gantt_outer = outer
 
-        tk.Label(outer, text='GANTT CHART', bg=BG2, fg=TXT3,
-                 font=('Courier New',8), anchor='w', padx=14, pady=8).pack(fill='x')
+        tk.Label(outer, text='GANTT CHART', bg=BG2, fg=ACCENT,
+                 font=('Segoe UI', 10), anchor='w', padx=14, pady=8).pack(fill='x')
 
         holder = tk.Frame(outer, bg=BG2)
         holder.pack(fill='x', padx=14, pady=(0,12))
@@ -378,13 +486,14 @@ class App(tk.Frame):
             return
 
         X0    = 48
-        ROW_H = 30
-        TOP   = 18
+        ROW_H = 45
+        TOP   = 28
         n     = len(self.procs)
         cv_w  = X0 + maxT*CW + 20
 
         gc.delete('all')
         gc.configure(scrollregion=(0, 0, cv_w, TOP + n*ROW_H + 8))
+        gc.create_rectangle(0, 0, cv_w, TOP + n*ROW_H + 8, fill=BG, outline="")
 
         # finish times
         fin = {}
@@ -395,7 +504,7 @@ class App(tk.Frame):
         # time labels
         for i in range(maxT+1):
             gc.create_text(X0 + i*CW, 2, text=str(i),
-                           fill=TXT3, font=('Courier New',7), anchor='n')
+                           fill=TXT2, font=('Segoe UI', 10), anchor='n')
 
         for ri, p in enumerate(self.procs):
             col = pcol(self.procs, p['id'])
@@ -403,7 +512,7 @@ class App(tk.Frame):
             yc  = y0 + CH//2
 
             gc.create_text(2, yc, text=p['id'],
-                           fill=TXT2, font=('Courier New',9,'bold'), anchor='w')
+                           fill=TXT2, font=('Segoe UI', 10,'bold'), anchor='w')
 
             for t in range(maxT):
                 entry   = log[t]
@@ -416,10 +525,10 @@ class App(tk.Frame):
                 if is_run:
                     gc.create_rectangle(x0, y0, x1, y0+CH, fill=col, outline=col)
                     gc.create_text(x0+CW//2, yc, text=p['id'],
-                                   fill='white', font=('Courier New',7,'bold'))
+                                   fill='white', font=('Segoe UI', 10,'bold'))
                 elif arrived and not is_done:
                     gc.create_rectangle(x0, y0, x1, y0+CH,
-                                        fill=blend(col,0.14), outline=blend(col,0.32))
+                                        fill=blend(col,0.10), outline=blend(col,0.25))
                 else:
                     gc.create_rectangle(x0, y0, x1, y0+CH, fill=BG, outline=BORD)
 
@@ -445,15 +554,15 @@ class App(tk.Frame):
         outer.pack(fill='x', padx=P, pady=(0,10))
         self._stats_outer = outer
 
-        tk.Label(outer, text='STATISTICS', bg=BG2, fg=TXT3,
-                 font=('Courier New',8), anchor='w', padx=14, pady=8).pack(fill='x')
+        tk.Label(outer, text='STATISTICS', bg=BG2, fg=ACCENT,
+         font=('Segoe UI', 10, 'bold'), anchor='w', padx=14, pady=8)
 
         tf = tk.Frame(outer, bg=BG)
         tf.pack(fill='x')
         for c in range(5): tf.grid_columnconfigure(c, weight=1)
 
         for ci, h in enumerate(['PID','COMPLETION','TURNAROUND','WAITING','RESPONSE']):
-            tk.Label(tf, text=h, bg=BG2, fg=TXT3, font=('Courier New',8),
+            tk.Label(tf, text=h, bg=BG2, fg=TXT3, font=('Segoe UI', 10),
                      anchor='w', padx=10, pady=5).grid(row=0, column=ci, sticky='ew')
 
         for ri, s in enumerate(stats):
@@ -467,22 +576,22 @@ class App(tk.Frame):
             dot.pack(side='left', padx=(0,5))
             dot.create_rectangle(1,1,8,8, fill=col, outline=col)
             tk.Label(pf, text=s['id'], bg=BG, fg=TXT,
-                     font=('Courier New',10)).pack(side='left')
+                     font=('Segoe UI', 10)).pack(side='left')
             for ci, k in enumerate(['comp','tat','wait','resp']):
                 tk.Label(tf, text=str(s[k]), bg=BG, fg=TXT,
-                         font=('Courier New',10), anchor='w', padx=10
+                         font=('Segoe UI', 10), anchor='w', padx=10
                          ).grid(row=row, column=ci+1, sticky='ew', pady=6)
 
         n = len(stats)
         tk.Frame(tf, bg=BORD, height=1).grid(
             row=n*2+1, column=0, columnspan=5, sticky='ew')
-        tk.Label(tf, text='AVG', bg=BG2, fg=TXT3, font=('Courier New',8),
+        tk.Label(tf, text='AVG', bg=BG2, fg=TXT3, font=('Segoe UI', 10),
                  anchor='w', padx=10, pady=6).grid(row=n*2+2, column=0, sticky='ew')
         tk.Label(tf, text='', bg=BG2).grid(row=n*2+2, column=1, sticky='ew')
         for ci, k in enumerate(['tat','wait','resp']):
             avg = sum(s[k] for s in stats) / len(stats)
             tk.Label(tf, text=f'{avg:.2f}', bg=BG2, fg=TXT,
-                     font=('Courier New',10,'bold'), anchor='w', padx=10, pady=6
+                     font=('Segoe UI', 10,'bold'), anchor='w', padx=10, pady=6
                      ).grid(row=n*2+2, column=ci+2, sticky='ew')
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -504,10 +613,10 @@ class App(tk.Frame):
         if self._step_lbl:
             if done:
                 self._step_lbl.config(text='✓  All processes finished',
-                                      fg='#22C55E', font=('Courier New',10))
+                                      fg='#22C55E', font=('Segoe UI', 10))
             else:
                 self._step_lbl.config(text='— or press Space',
-                                      fg=TXT3, font=('Courier New',9))
+                                      fg=TXT3, font=('Segoe UI', 10))
 
         # clock card
         if self._card_clock:
@@ -519,7 +628,7 @@ class App(tk.Frame):
             self._card_running.config(
                 text=cur or 'IDLE',
                 fg=pcol(self.procs, cur) if cur else TXT3,
-                font=('Courier New', 18 if cur else 12, 'bold'))
+                font=('Segoe UI', 18 if cur else 12, 'bold'))
 
         # ready queue
         if self._queue_row:
@@ -539,7 +648,7 @@ class App(tk.Frame):
             fw  = 'bold' if ps['state'] == 'running' else 'normal'
             rc  = TXT3 if ps['rem'] == 0 else TXT
             ws['rem'].config(text=str(ps['rem']), fg=rc,
-                             font=('Courier New',10,fw))
+                             font=('Segoe UI', 10,fw))
             ws['state'].config(
                 text=ps['state'].upper() + (' ▶' if ps['state'] == 'running' else ''),
                 bg=blend(sc, 0.20), fg=sc)
