@@ -326,26 +326,70 @@ class App(tk.Frame):
             for c in range(6):
                 row.grid_columnconfigure(c, weight=1)
 
-            # ── PID ─────────────────────────────
-            tk.Label(
-                row,
-                text=p['id'],
-                bg=BG,
-                fg=TXT,
-                font=('Segoe UI', 10, 'bold'),
-                anchor='center'
-            ).grid(row=0, column=0, sticky='nsew', padx=6, pady=6)
-
-            # ── ARRIVAL / BURST / PRIORITY ─────
-            for ci, fld in enumerate(['at', 'bt', 'pr']):
+            # PID
+            if running:
                 tk.Label(
                     row,
-                    text=str(p[fld]),
+                    text=p['id'],
                     bg=BG,
                     fg=TXT,
-                    font=('Segoe UI', 10),
+                    font=('Segoe UI', 10, 'bold'),
                     anchor='center'
-                ).grid(row=0, column=ci + 1, sticky='nsew', padx=6, pady=6)
+                ).grid(row=0, column=0, sticky='nsew', padx=6, pady=6)
+            else:
+                e = tk.Entry(
+                    row,
+                    width=8,
+                    bg=BG,
+                    fg=TXT,
+                    insertbackground=TXT,
+                    relief='flat',
+                    justify='center',
+                    font=('Segoe UI', 10)
+                )
+                e.insert(0, p['id'])
+                e.bind('<FocusOut>',
+                    lambda ev, idx=i: self._upd_id(idx, ev.widget.get()))
+                e.bind('<Return>',
+                    lambda ev, idx=i: self._upd_id(idx, ev.widget.get()))
+                e.grid(row=0, column=0, sticky='nsew', padx=6, pady=6)
+
+            # ARRIVAL / BURST / PRIORITY
+            for ci, fld in enumerate(['at', 'bt', 'pr']):
+
+                if running:
+                    tk.Label(
+                        row,
+                        text=str(p[fld]),
+                        bg=BG,
+                        fg=TXT,
+                        font=('Segoe UI', 10),
+                        anchor='center'
+                    ).grid(row=0, column=ci+1, sticky='nsew', padx=6, pady=6)
+
+                else:
+                    e = tk.Entry(
+                        row,
+                        width=8,
+                        bg=BG,
+                        fg=TXT,
+                        insertbackground=TXT,
+                        relief='flat',
+                        justify='center',
+                        font=('Segoe UI', 10)
+                    )
+                    e.insert(0, str(p[fld]))
+                    e.bind(
+                        '<FocusOut>',
+                        lambda ev, idx=i, f=fld:
+                            self._upd_num(idx, f, ev.widget.get())
+                    )
+                    e.bind(
+                        '<Return>',
+                        lambda ev, idx=i, f=fld:
+                            self._upd_num(idx, f, ev.widget.get())
+                    )
+                    e.grid(row=0, column=ci+1, sticky='nsew', padx=6, pady=6)
 
             # ── REMAINING + STATE (only when sim is running) ─────
             if ps:
@@ -387,6 +431,21 @@ class App(tk.Frame):
                     cursor='hand2',
                     command=lambda idx=i: self._del_proc(idx)
                 ).grid(row=0, column=6, padx=6, pady=6)
+            
+        if not running:
+            tk.Frame(cont, bg=BORD, height=1).pack(fill='x')
+
+            tk.Button(
+                cont,
+                text='+ ADD PROCESS',
+                bg=BG,
+                fg=ACCENT,
+                font=('Segoe UI', 10, 'bold'),
+                relief='flat',
+                pady=8,
+                cursor='hand2',
+                command=self._add_proc
+            ).pack(fill='x')
 
     # ── status cards (built once) ─────────────────────────────────────────────
     def _build_cards(self, P):
